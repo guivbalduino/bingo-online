@@ -4,6 +4,8 @@ from config import BINGO_COLUMNS, get_initial_numbers
 from state import load_state, save_state, load_previous_state, save_current_as_previous
 from audio import play_number_sound
 
+st.set_page_config(layout="wide", page_title="Bingo Online 🎰", initial_sidebar_state="expanded")
+
 def sound_setting_changed():
     save_state(st.session_state)
 
@@ -16,9 +18,7 @@ if 'remaining_numbers' not in st.session_state:
 if 'sound_enabled' not in st.session_state:
     st.session_state.sound_enabled = initial_state['sound_enabled']
 
-st.set_page_config(layout="wide")
-
-st.title('Bingo App')
+st.title('Bingo Online 🎰')
 
 # Sidebar
 with st.sidebar:
@@ -66,11 +66,12 @@ with st.sidebar:
 st.header('Tabela de Números')
 st.subheader('Tabela completa de números:')
 
-# Estilos
+# Estilos CSS aprimorados
 cell_width = '60px'
-unsorted_style = f'background-color: #f0f0f0; color: #333; font-size: 20px; width: {cell_width}; height: {cell_width}; padding: 10px; text-align: center; border-radius: 10px; margin: 5px; display: inline-block;'
-sorted_style = f'background-color: #00ff00; color: #333; font-size: 20px; width: {cell_width}; height: {cell_width}; padding: 10px; text-align: center; border-radius: 10px; margin: 5px; display: inline-block;'
-label_style = f'font-size: 20px; width: {cell_width}; height: {cell_width}; padding: 10px; text-align: center; margin: 5px; display: inline-block;'
+base_style = f'width: {cell_width}; height: {cell_width}; line-height: {cell_width}; text-align: center; border-radius: 50%; margin: 5px; font-size: 20px; font-weight: bold; border: 1px solid #444; box-shadow: 0 4px 8px rgba(0,0,0,0.4);'
+unsorted_style = f'{base_style} background-color: #333; color: #fff;'
+sorted_style = f'{base_style} background-color: #ffbf00; color: #000;'
+label_style = f'font-size: 24px; width: {cell_width}; height: {cell_width}; line-height: {cell_width}; padding: 10px; text-align: center; margin: 5px; display: inline-block; font-weight: bold;' # Revertido para o estilo original de label horizontal
 
 for label, (start, end) in BINGO_COLUMNS.items():
     row_html = f'<div style="display: flex; flex-direction: row; align-items: center;"><div style="{label_style}">{label}</div>'
@@ -80,6 +81,10 @@ for label, (start, end) in BINGO_COLUMNS.items():
     row_html += '</div>'
     st.markdown(row_html, unsafe_allow_html=True)
 
+st.write("---") # Separador visual
+
 if st.session_state.drawn_numbers:
-    st.subheader('Números sorteados (em ordem):')
-    st.write(', '.join(map(str, sorted(st.session_state.drawn_numbers))))
+    st.subheader('Números Sorteados:')
+    # Exibe os números sorteados em um layout mais agradável
+    drawn_numbers_str = [f'<div style="{sorted_style} margin: 2px;">{num}</div>' for num in sorted(st.session_state.drawn_numbers)]
+    st.markdown(f'<div style="display: flex; flex-wrap: wrap; justify-content: center;">{"".join(drawn_numbers_str)}</div>', unsafe_allow_html=True)
