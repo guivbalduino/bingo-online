@@ -1,7 +1,4 @@
 import streamlit as st
-import pyttsx3
-
-import streamlit as st
 import os
 
 def play_number_sound(number):
