@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import streamlit as st
 from config import get_initial_numbers
 
@@ -11,10 +12,21 @@ def save_state(state, filename='state.json'):
         'sound_enabled': state.get('sound_enabled', True)
     }
     try:
-        with open(filename, 'w') as f:
-            json.dump(data, f)
-    except IOError as e:
+        # Create a temporary file in the same directory
+        temp_dir = os.path.dirname(filename)
+        if not temp_dir:
+            temp_dir = '.'
+        with tempfile.NamedTemporaryFile('w', delete=False, dir=temp_dir, prefix=os.path.basename(filename) + '~') as temp_f:
+            json.dump(data, temp_f)
+            temp_f.flush()
+            os.fsync(temp_f.fileno())
+        # Rename the temporary file to the final filename
+        os.rename(temp_f.name, filename)
+    except (IOError, OSError) as e:
         st.warning(f"Não foi possível salvar o estado do jogo em {filename}: {e}")
+        # Clean up the temporary file if it exists
+        if 'temp_f' in locals() and os.path.exists(temp_f.name):
+            os.remove(temp_f.name)
 
 # Função para carregar estado
 def load_state(filename='state.json'):

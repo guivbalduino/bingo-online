@@ -2,61 +2,110 @@ import streamlit as st
 import random
 from config import BINGO_COLUMNS, get_initial_numbers
 from state import load_state, save_state, load_previous_state, save_current_as_previous
-from audio import play_number_sound
+from audio import get_number_audio_bytes
 
 st.set_page_config(layout="wide", page_title="Bingo Online 🎰", initial_sidebar_state="expanded")
+
+# --- Styling ---
+st.markdown("""
+<style>
+    /* Last number display */
+    .last-number-container {
+        background-color: #ffbf00;
+        color: #000;
+        padding: 10px;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .last-number-container h2 {
+        color: #000;
+        margin: 0;
+    }
+    .last-number-container p {
+        font-size: 80px;
+        font-weight: bold;
+        color: #000;
+        margin: 0;
+    }
+
+    /* Bingo grid cells */
+    .bingo-cell {
+        width: 60px;
+        height: 60px;
+        line-height: 60px;
+        text-align: center;
+        border-radius: 50%;
+        margin: 5px;
+        font-size: 20px;
+        font-weight: bold;
+        border: 1px solid #444;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    }
+    .unsorted {
+        background-color: #333;
+        color: #fff;
+    }
+    .sorted {
+        background-color: #ffbf00;
+        color: #000;
+    }
+    .last-drawn {
+        box-shadow: 0 0 15px 5px #ffc107; /* Brilho amarelo/dourado */
+    }
+
+    /* Bingo row label */
+    .bingo-label {
+        font-size: 24px;
+        width: 60px;
+        height: 60px;
+        line-height: 60px;
+        padding: 10px;
+        text-align: center;
+        margin: 5px;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+if st.session_state.get('new_number_drawn'):
+    last_number_drawn = st.session_state.drawn_numbers[-1]
+    st.session_state.audio_to_play = get_number_audio_bytes(last_number_drawn)
+    st.session_state.new_number_drawn = False
 
 def sound_setting_changed():
     save_state(st.session_state)
 
-# Carregar estado atual
-initial_state = load_state()
+# --- State Initialization ---
 if 'drawn_numbers' not in st.session_state:
+    initial_state = load_state()
     st.session_state.drawn_numbers = initial_state['drawn_numbers']
-if 'remaining_numbers' not in st.session_state:
     st.session_state.remaining_numbers = initial_state['remaining_numbers']
-if 'sound_enabled' not in st.session_state:
     st.session_state.sound_enabled = initial_state['sound_enabled']
 
-# Obter o último número sorteado para destaque visual
-last_number = None
-if st.session_state.drawn_numbers:
-    last_number = st.session_state.drawn_numbers[-1]
+last_number = st.session_state.drawn_numbers[-1] if st.session_state.drawn_numbers else None
 
 st.title('Bingo Online 🎰')
 
-def get_stats(drawn_numbers, columns_config):
-    stats = {label: 0 for label in columns_config.keys()}
-    for number in drawn_numbers:
-        for label, (start, end) in columns_config.items():
-            if start <= number <= end:
-                stats[label] += 1
-                break
-    return stats
-
-# Sidebar
+# --- Sidebar ---
 with st.sidebar:
     st.header("Controles")
-    
+
     if last_number is not None:
-        # HTML/CSS para o último número
-        last_number_html = f"""
-        <div style="
-            background-color: #ffbf00;
-            color: #000;
-            padding: 10px;
-            border-radius: 10px;
-            text-align: center;
-            margin-bottom: 20px;
-        ">
-            <h2 style="color: #000; margin: 0;">Último Número</h2>
-            <p style="font-size: 80px; font-weight: bold; color: #000; margin: 0;">{last_number}</p>
-        </div>
-        """
-        st.markdown(last_number_html, unsafe_allow_html=True)
+        with st.container():
+            st.markdown(f"""
+            <div class="last-number-container">
+                <h2>Último Número</h2>
+                <p>{last_number}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    if st.session_state.get('audio_to_play') and st.session_state.sound_enabled:
+        st.audio(st.session_state.audio_to_play, format='audio/wav', start_time=0, autoplay=True)
+        st.session_state.audio_to_play = None # Clear the audio after playing
 
     st.subheader(f"Números restantes: {len(st.session_state.remaining_numbers)}")
-    
+
     st.checkbox('Habilitar som', key='sound_enabled', on_change=sound_setting_changed)
 
     if st.button('Sortear Número'):
@@ -65,79 +114,74 @@ with st.sidebar:
             st.session_state.drawn_numbers.append(drawn_number)
             st.session_state.remaining_numbers.remove(drawn_number)
             save_state(st.session_state)
-            play_number_sound(drawn_number)
+            st.session_state.new_number_drawn = True
+            st.rerun()
 
-    if st.button('Resetar Jogo'):
-        if st.session_state.get('confirm_reset', False):
+    with st.expander("Resetar Jogo"):
+        if st.button("Clique para confirmar o reset", key='confirm_reset_button'):
             save_current_as_previous(st.session_state)
             st.session_state.drawn_numbers = []
             st.session_state.remaining_numbers = get_initial_numbers()
-            st.session_state.confirm_reset = False
             save_state(st.session_state)
-        else:
-            st.session_state.confirm_reset = True
-            st.warning("Tem certeza que deseja resetar o jogo? Clique novamente para confirmar.")
+            st.rerun()
 
-    if st.button('Carregar Jogo Anterior'):
-        if st.session_state.get('confirm_load_previous', False):
+    with st.expander("Carregar Jogo Anterior"):
+        if st.button("Clique para confirmar o carregamento", key='confirm_load_button'):
             previous_state = load_previous_state()
             st.session_state.drawn_numbers = previous_state['drawn_numbers']
             st.session_state.remaining_numbers = previous_state['remaining_numbers']
             st.session_state.sound_enabled = previous_state['sound_enabled']
             save_state(st.session_state)
-            st.session_state.confirm_load_previous = False
-        else:
-            st.session_state.confirm_load_previous = True
-            st.warning("Tem certeza que deseja carregar o jogo anterior? Clique novamente para confirmar.")
+            st.rerun()
 
-    # Seção de Estatísticas
+    # Statistics Section
     st.write("---")
     st.header("Estatísticas")
-    
-    stats = get_stats(st.session_state.drawn_numbers, BINGO_COLUMNS)
-    cols = st.columns(5)
+
+    stats = {label: 0 for label in BINGO_COLUMNS.keys()}
+    for number in st.session_state.drawn_numbers:
+        for label, (start, end) in BINGO_COLUMNS.items():
+            if start <= number <= end:
+                stats[label] += 1
+                break
+
+    cols = st.columns(len(BINGO_COLUMNS))
     for i, (label, count) in enumerate(stats.items()):
-        with cols[i]:
-            label_color = "#ffbf00" if count == 15 else "inherit"
-            html = f"""
-            <div style="text-align: center;">
-                <p style="font-size: 24px; font-weight: bold; color: {label_color};">{label}</p>
-                <p style="font-size: 32px; font-weight: bold;">{count}</p>
-            </div>
-            """
-            st.markdown(html, unsafe_allow_html=True)
+        cols[i].metric(label, count)
 
-# Tabela de Números
+
+# --- Main Content ---
 st.header('Tabela de Números')
-st.subheader('Tabela completa de números:')
-
-# Estilos CSS aprimorados
-cell_width = '60px'
-base_style = f'width: {cell_width}; height: {cell_width}; line-height: {cell_width}; text-align: center; border-radius: 50%; margin: 5px; font-size: 20px; font-weight: bold; border: 1px solid #444; box-shadow: 0 4px 8px rgba(0,0,0,0.4);'
-unsorted_style = f'{base_style} background-color: #333; color: #fff;'
-sorted_style = f'{base_style} background-color: #ffbf00; color: #000;'
-label_style = f'font-size: 24px; width: {cell_width}; height: {cell_width}; line-height: {cell_width}; padding: 10px; text-align: center; margin: 5px; display: inline-block; font-weight: bold;' # Revertido para o estilo original de label horizontal
 
 for label, (start, end) in BINGO_COLUMNS.items():
-    row_html = f'<div style="display: flex; flex-direction: row; align-items: center;"><div style="{label_style}">{label}</div>'
-    for number in range(start, end + 1):
-        # Determine base style
-        style = unsorted_style
-        if number in st.session_state.drawn_numbers:
-            style = sorted_style
-        
-        # Add gray box-shadow if it's the last drawn number
-        if last_number is not None and number == last_number:
-            style += ' box-shadow: 0 0 7px 3px #888888;' # Add gray glow
-        
-        row_html += f'<div style="{style}">{number}</div>'
-    row_html += '</div>'
-    st.markdown(row_html, unsafe_allow_html=True)
+    cols = st.columns(16) # 1 for label + 15 for numbers
+    with cols[0]:
+        st.markdown(f'<div class="bingo-label">{label}</div>', unsafe_allow_html=True)
 
-st.write("---") # Separador visual
+    for i, number in enumerate(range(start, end + 1)):
+        with cols[i+1]:
+            is_drawn = number in st.session_state.drawn_numbers
+            is_last = number == last_number
+
+            cell_class = "sorted" if is_drawn else "unsorted"
+            if is_last:
+                cell_class += " last-drawn"
+
+            st.markdown(f'<div class="bingo-cell {cell_class}">{number}</div>', unsafe_allow_html=True)
+
+
+st.write("---")
 
 if st.session_state.drawn_numbers:
-    st.subheader('Números Sorteados:')
-    # Exibe os números sorteados em um layout mais agradável
-    drawn_numbers_str = [f'<div style="{sorted_style} margin: 2px;">{num}</div>' for num in sorted(st.session_state.drawn_numbers)]
-    st.markdown(f'<div style="display: flex; flex-wrap: wrap; justify-content: center;">{"".join(drawn_numbers_str)}</div>', unsafe_allow_html=True)
+    st.header('Números Sorteados')
+    
+    sorted_drawn = sorted(st.session_state.drawn_numbers)
+    
+    # Display drawn numbers in rows of 15
+    num_cols = 15
+    for i in range(0, len(sorted_drawn), num_cols):
+        cols = st.columns(num_cols)
+        chunk = sorted_drawn[i:i + num_cols]
+        for j, number in enumerate(chunk):
+            with cols[j]:
+                st.markdown(f'<div class="bingo-cell sorted">{number}</div>', unsafe_allow_html=True)
